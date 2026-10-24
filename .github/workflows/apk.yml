@@ -1,7 +1,8 @@
 name: APK
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['index.html', 'version.json', 'android-res/**', 'capacitor.config.json', 'package.json', '.github/workflows/apk.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -44,9 +45,14 @@ jobs:
         with:
           name: ritmik-sayma-apk
           path: ritmik-sayma.apk
+      - name: Sürümü oku
+        id: ver
+        run: echo "v=$(node -p "require('./version.json').version")" >> "$GITHUB_OUTPUT"
       - name: Release'e yükle
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          name: Ritmik Sayma v${{ steps.ver.outputs.v }}
           files: ritmik-sayma.apk
-          name: Ritmik Sayma ${{ github.ref_name }}
+          make_latest: true
