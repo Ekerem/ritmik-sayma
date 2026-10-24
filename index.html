@@ -156,7 +156,7 @@ const BOX=70, STEP=92, GAP=170, BOX_BOTTOM=GROUND-120;
 const FONT='"Baloo 2","Fredoka","Trebuchet MS","Arial Rounded MT Bold",Arial,sans-serif';
 const SPEEDS={yavas:125,normal:170,hizli:225};
 // ---------- app version, update check, offline layer ----------
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.1';
 const PAGES_URL='https://ekerem.github.io/ritmik-sayma/';
 const IS_NATIVE=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
 const IN_APP=IS_NATIVE||/[?&]app=/.test(location.search);
@@ -223,11 +223,12 @@ const SFX={c:null,on:store.get('ritmik_sound',true),
     if(f2)o.frequency.exponentialRampToValueAtTime(f2,s+d);
     g.gain.setValueAtTime(v||.06,s);g.gain.exponentialRampToValueAtTime(.0001,s+d);
     o.connect(g).connect(c.destination);o.start(s);o.stop(s+d+.03);},
-  noise(t0,d,v,freq){const c=this.c;if(!c||!this.on)return;const n=Math.floor(c.sampleRate*d);
-    const b=c.createBuffer(1,n,c.sampleRate),a=b.getChannelData(0);for(let i=0;i<n;i++)a[i]=Math.random()*2-1;
-    const s=c.createBufferSource();s.buffer=b;const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=freq||1000;
+  noise(t0,d,v,freq){const c=this.c;if(!c||!this.on)return;
+    if(!this.nb){const n=Math.floor(c.sampleRate*4);this.nb=c.createBuffer(1,n,c.sampleRate);const a=this.nb.getChannelData(0);for(let i=0;i<n;i++)a[i]=Math.random()*2-1}
+    const b=this.nb;
+    const s=c.createBufferSource();s.buffer=b;s.loop=true;const fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=freq||1000;
     const g=c.createGain();const st=c.currentTime+t0;g.gain.setValueAtTime(v||.2,st);g.gain.exponentialRampToValueAtTime(.0001,st+d);
-    s.connect(fl).connect(g).connect(c.destination);s.start(st);},
+    s.connect(fl).connect(g).connect(c.destination);s.start(st,Math.random()*3);s.stop(st+d+.05);},
   jump(){this.tone(330,0,.14,'square',.04,660)},
   star(){[784,988,1175,1568].forEach((f,i)=>this.tone(f,i*.07,.2,'triangle',.09))},
   fire(){this.noise(0,.55,.28,700);this.tone(240,0,.45,'sawtooth',.05,70)},
@@ -398,13 +399,13 @@ function update(dt){
    g.dog.d+=Math.max(-(g.state==='fail'?420:g.state==='win'?380:260)*dt,Math.min(300*dt,dd));
    const arrived=g.state==='win'&&Math.abs(tg-g.dog.d)<3;
    if(arrived)g.dogLook=Math.min(1,(g.dogLook||0)+dt*2.5);
-   if(!(g.state==='fail'&&g.dog.d<=17)&&!arrived)g.dog.run+=dt*SPEEDS[g.sp]/18}
+   if(!(g.state==='fail'&&g.dog.d<=17)&&!arrived)g.dog.run+=dt*(SPEEDS[g.sp]||SPEEDS.normal)/18}
   if(g.state==='fail'){g.failT-=dt;if(g.shake>0)g.shake-=dt;g.p.blink=0;updParts(dt);
     if(failReady()&&!g.failExit){g.failExit=1;show('bExit',true)}return}
   if(g.state==='play'||g.state==='win'){
     const camMax=g.castleX+160-viewW/2;
     if(g.state==='play'){
-      const sp=SPEEDS[g.sp];p.x+=sp*dt;p.run+=dt*sp/22;
+      const sp=SPEEDS[g.sp]||SPEEDS.normal;p.x+=sp*dt;p.run+=dt*sp/22;
       if(p.buf>0)p.buf-=dt;
       if(!p.ground){
         const prevTop=p.y-PH;p.vy+=G*dt;p.y+=p.vy*dt;const top=p.y-PH;
@@ -444,9 +445,9 @@ function updParts(dt){
   for(const q of g.parts){q.life-=dt;q.vy+=(q.g||0)*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;
     if(q.type==='spark'){q.vx*=.985;q.vy*=.985}
     if(q.type==='rocket'){if(q.vy>=-60||q.life<=0){q.life=0;explode(q)}else if(Math.random()<.8)g.parts.push({type:'spark',x:q.x,y:q.y,vx:(Math.random()-.5)*30,vy:20,life:.4,max:.4,c:'#fff3b0',r:2.5,g:60})}}
-  g.parts=g.parts.filter(q=>q.life>0);
+  {const a=g.parts;let k=0;for(let i=0;i<a.length;i++)if(a[i].life>0)a[k++]=a[i];a.length=Math.min(k,500)}
   for(const q of g.ui){q.t+=dt;if(q.type==='conf'){q.y+=q.vy*dt;q.x+=Math.sin(q.t*3+q.ph)*40*dt;q.rot+=q.vr*dt}}
-  g.ui=g.ui.filter(q=>q.type==='fly'?q.t<.8:q.y<H+30);
+  {const a=g.ui;let k=0;for(let i=0;i<a.length;i++){const q=a[i];if(q.type==='fly'?q.t<.8:q.y<H+30)a[k++]=q}a.length=Math.min(k,250)}
 }
 const FW=[['#ff5d8f','#ffd1e1','#ffffff'],['#ffd23d','#fff3b0','#ff9f1c'],['#4dd2ff','#c9f3ff','#ffffff'],['#9b6bff','#e0d0ff','#ff5d8f'],['#3ccf7a','#d4ffe3','#ffd23d']];
 function launch(){
@@ -481,16 +482,17 @@ function heart(x,y,s,on){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.beginP
 
 // ---------- space background, moon path, lava ----------
 // ---------- pre-rendered layers (drawn once, reused every frame) ----------
-const CACHE={box:{}},GR={};
+const CACHE={box:{},ctxs:[]},GR={};
 function makeCanvas(w,h){const c=document.createElement('canvas'),k=scale*dpr;c.width=Math.max(1,Math.ceil(w*k));c.height=Math.max(1,Math.ceil(h*k));
-  const x=c.getContext('2d');x.setTransform(k,0,0,k,0,0);return [c,x]}
+  const x=c.getContext('2d');x.setTransform(k,0,0,k,0,0);if(CACHE.ctxs)CACHE.ctxs.push(x);return [c,x]}
 function withCtx(x,fn){const m=ctx;ctx=x;try{fn()}finally{ctx=m}}
 function buildCaches(){
-  CACHE.box={};if(g&&g.boxes&&g.boxes.length)setTimeout(warmBoxes,0);
+  CACHE.box={};CACHE.ctxs=[];
   CACHE.stars=[[.01,80,1.2,1],[.03,60,1.6,2],[.06,34,2.2,3]].map(([k,n,sz,seed])=>{const TW=1024,TH=GROUND-60,pts=[];
     for(let i=0;i<n;i++){const id=i*13+seed*1000;pts.push([rnd(id)*(TW-3),rnd(id+.5)*(TH-10),rnd(id+.9)<.15])}return {k,TW,sz,pts}});
   const mk=(w,h,fn)=>{const [pc,px]=makeCanvas(w,h);withCtx(px,()=>fn(w/2,h/2));return pc};
   CACHE.pl=[mk(180,180,(cx,cy)=>earth(cx,cy,58)),mk(180,100,(cx,cy)=>ringed(cx,cy,40)),mk(72,72,(cx,cy)=>redPlanet(cx,cy,30))];
+  warmBoxes();
 }
 function drawSky(){
   ctx.clearRect(0,0,viewW,H);
@@ -579,19 +581,20 @@ function drawBoxRaw(num,st){
   ctx.fillStyle=f;rr(0,0,BOX,BOX,10);ctx.fill();ctx.lineWidth=3;ctx.strokeStyle=e;ctx.stroke();
   ctx.fillStyle='rgba(255,255,255,.35)';rr(5,4,BOX-10,8,4);ctx.fill();
   ctx.fillStyle=e;for(const [dx,dy] of [[7,7],[BOX-7,7],[7,BOX-7],[BOX-7,BOX-7]]){ctx.beginPath();ctx.arc(dx,dy,2.5,0,7);ctx.fill()}
-  ctx.fillStyle=t;ctx.font=`800 ${num>=100?26:34}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(num,BOX/2,BOX/2+2);
+  if(num!=null){ctx.fillStyle=t;ctx.font=`800 ${num>=100?26:34}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(num,BOX/2,BOX/2+2);}
   if(st===1)drawStar(BOX-4,2,13);
   if(st===3){ctx.strokeStyle='#e67e22';ctx.lineWidth=3;ctx.setLineDash([5,4]);rr(-4,-4,BOX+8,BOX+8,13);ctx.stroke();ctx.setLineDash([])}
 }
-function boxSprite(num,st){const key=num+'_'+st;let im=CACHE.box[key];
-  if(!im){const [c,x]=makeCanvas(BOX+22,BOX+26);x.translate(8,13);withCtx(x,()=>drawBoxRaw(num,st));im=CACHE.box[key]=c}return im}
-function warmBoxes(){for(const b of g.boxes){boxSprite(b.num,0);if(b.target)boxSprite(b.num,1)}}
+// only 4 box backgrounds are cached (one per state); numbers are drawn live -> tiny, constant memory
+function boxSprite(st){let im=CACHE.box[st];
+  if(!im){const [c,x]=makeCanvas(BOX+22,BOX+26);x.translate(8,13);withCtx(x,()=>drawBoxRaw(null,st));im=CACHE.box[st]=c;CACHE.ctxs.push(x)}return im}
+function warmBoxes(){for(let st=0;st<4;st++)boxSprite(st)}
 function drawBox(b){
   const sx=b.x-g.cam;if(sx<-BOX-20||sx>viewW+20)return;
-  const y=BOX_BOTTOM-BOX-Math.sin(b.bump*Math.PI)*12,key=b.num+'_'+b.st;
-  const im=boxSprite(b.num,b.st);
-  ctx.drawImage(im,sx-8,y-13,BOX+22,BOX+26);
+  const y=BOX_BOTTOM-BOX-Math.sin(b.bump*Math.PI)*12;
+  ctx.drawImage(boxSprite(b.st),sx-8,y-13,BOX+22,BOX+26);
+  ctx.fillStyle=BOXC[b.st][2];ctx.fillText(b.num,sx+BOX/2,y+BOX/2+2);
 }
 function sign(wx,txt,arrowLeft,col){
   const x=wx-g.cam;if(x<-200||x>viewW+200)return;
@@ -1002,7 +1005,7 @@ function draw(){
   if(g.shake>0){const a=10*Math.min(.5,g.shake);ctx.translate((Math.random()-.5)*a,(Math.random()-.5)*a)};
   drawSky();drawGround();drawNight();
   if(g.state!=='menu'){drawShip();sign(260,'İLERİ SAY',false,'#b8f2a0');sign(g.turnX+120,'GERİ SAY',true,'#ffd166')}
-  if(g.state!=='menu')for(const b of g.boxes)drawBox(b);
+  if(g.state!=='menu'){ctx.font=`800 34px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';for(const b of g.boxes)drawBox(b)}
   const p=g.p;const blinkHide=p.blink>0&&Math.floor(p.blink*14)%2===0;
   if(g.state!=='menu'){const dx=p.x-g.dog.d-38-g.cam;if(dx>-90)drawDog(dx,GROUND,g.dog.run,g.dog.bark)}
   if(!blinkHide&&p.alpha>0)drawCat(p.x-g.cam,p.y,p.run,p.ground,p.alpha);
@@ -1010,10 +1013,22 @@ function draw(){
 }
 let last=performance.now();
 let sdt=1/60;
-function frame(now){let dt=(now-last)/1000;last=now;if(dt>.25)dt=1/60;
+let fcount=0,errShown=0;
+function cachesLost(){for(const x of CACHE.ctxs)if(x.isContextLost&&x.isContextLost())return true;return !!(ctx.isContextLost&&ctx.isContextLost())}
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt=(now-last)/1000;last=now;if(!(dt>0)||dt>.25)dt=1/60;
   sdt+=(Math.min(dt,.1)-sdt)*.25;dt=Math.min(dt,.1)*.5+sdt*.5;
-  const n=Math.max(1,Math.ceil(dt/(1/120)));for(let i=0;i<n;i++)update(dt/n);
-  draw();requestAnimationFrame(frame)}
+  try{
+    if(++fcount%90===0&&cachesLost()){for(const k in GR)delete GR[k];buildCaches()}
+    const n=Math.max(1,Math.ceil(dt/(1/120)));for(let i=0;i<n;i++)update(dt/n);
+    if(!isFinite(g.p.x)||!isFinite(g.p.y)||!isFinite(g.cam)){g.p.x=g.p.x||0;g.p.y=GROUND;g.p.vy=0;g.p.ground=true;g.cam=g.p.x-viewW*.38}
+    draw();
+  }catch(err){if(!errShown){errShown=1;console.error('[ritmik]',err)}try{if(ctx.reset)ctx.reset();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}catch(e){}}
+}
+// if the browser drops the canvas memory (tablets under memory pressure), rebuild instead of going blank
+cvs.addEventListener('contextlost',e=>{e.preventDefault()});
+cvs.addEventListener('contextrestored',()=>{for(const k in GR)delete GR[k];buildCaches()});
 buildCaches();cachesReady=true;
 requestAnimationFrame(frame);
 })();
