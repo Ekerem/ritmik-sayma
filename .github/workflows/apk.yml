@@ -1,0 +1,52 @@
+name: APK
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Bağımlılıklar
+        run: npm install
+      - name: Web dosyaları
+        run: npm run www
+      - name: Android projesi
+        run: npx cap add android
+      - name: Simge, yatay ekran ve sabit imza
+        run: |
+          RES=android/app/src/main/res
+          rm -rf $RES/mipmap-anydpi-v26
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            rm -f $RES/mipmap-$d/ic_launcher*.webp $RES/mipmap-$d/ic_launcher*.png
+            cp android-res/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher.png
+            cp android-res/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher_round.png
+          done
+          sed -i 's/<activity/<activity android:screenOrientation="sensorLandscape"/' android/app/src/main/AndroidManifest.xml
+          mkdir -p ~/.android && cp android-res/debug.keystore ~/.android/debug.keystore
+      - name: Senkronize et
+        run: npx cap sync android
+      - name: APK derle
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: APK'yı adlandır
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ritmik-sayma.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ritmik-sayma-apk
+          path: ritmik-sayma.apk
+      - name: Release'e yükle
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ritmik-sayma.apk
+          name: Ritmik Sayma ${{ github.ref_name }}
