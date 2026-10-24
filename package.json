@@ -1,6 +1,6 @@
 {
   "name": "ritmik-sayma",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "Venüs ile ritmik sayma oyunu (2'şer-9'ar ileri ve geri)",
   "scripts": {

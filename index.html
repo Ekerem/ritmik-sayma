@@ -156,7 +156,7 @@ const BOX=70, STEP=92, GAP=170, BOX_BOTTOM=GROUND-120;
 const FONT='"Baloo 2","Fredoka","Trebuchet MS","Arial Rounded MT Bold",Arial,sans-serif';
 const SPEEDS={yavas:125,normal:170,hizli:225};
 // ---------- app version, update check, offline layer ----------
-const APP_VERSION='1.0.3';
+const APP_VERSION='1.0.4';
 const PAGES_URL='https://ekerem.github.io/ritmik-sayma/';
 const IS_NATIVE=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
 const IN_APP=IS_NATIVE||/[?&]app=/.test(location.search);
@@ -268,6 +268,7 @@ function startGame(n){
   g.cam=-viewW*.38;g.count=3.4;g.lastBeep=4;g.state='count';
   show('menu',false);show('win',false);show('pause',false);show('bExit',false);show('bye',false);show('hud',true);show('bPause',true);show('bHome',true);show('bJump',true);
   try{window.focus()}catch(e){}
+  setTimeout(warmTexts,50);
 }
 function show(id,v){document.getElementById(id).hidden=!v}
 
@@ -391,7 +392,7 @@ function update(dt){
   if(g.state==='count'){
     g.count-=dt;const c=Math.ceil(g.count-.4);
     if(c!==g.lastBeep&&c>=0){g.lastBeep=c;SFX.beep(c===0)}
-    if(g.count<=0){g.state='play';g.banner={txt:'Hadi! '+ER[g.n]+' say',sub:'Sadece '+KAT[g.n]+' katlarına vur!',t:2.2}}
+    if(g.count<=0){g.state='play';g.banner=Object.assign(startBanner(),{t:2.2})}
     g.cam=p.x-viewW*.38;updParts(dt);return;
   }
   if(g.dog.bark>0)g.dog.bark-=dt;
@@ -420,7 +421,7 @@ function update(dt){
           if(g.state!=='play')break;
         }
       }
-      if(g.phase===0&&p.x>g.turnX){g.phase=1;SFX.turn();g.banner={txt:'Şimdi geriye say!',sub:FROM[g.n]+' başla: '+(10*g.n)+', '+(9*g.n)+', '+(8*g.n)+'...',t:3}}
+      if(g.phase===0&&p.x>g.turnX){g.phase=1;SFX.turn();g.banner=Object.assign(turnBanner(),{t:3})}
       if(p.x>=g.castleX+160){g.state='win';g.winT=0;p.ground=true;p.y=GROUND;SFX.win();
         done[g.n]=Math.max(done[g.n]||0,g.stars);store.set('ritmik_done',done);}
     }else{
@@ -482,12 +483,12 @@ function heart(x,y,s,on){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.beginP
 
 // ---------- space background, moon path, lava ----------
 // ---------- pre-rendered layers (drawn once, reused every frame) ----------
-const CACHE={box:{},ctxs:[]},GR={};
+const CACHE={box:{},ctxs:[],spr:{},cards:{}},GR={};
 function makeCanvas(w,h){const c=document.createElement('canvas'),k=scale*dpr;c.width=Math.max(1,Math.ceil(w*k));c.height=Math.max(1,Math.ceil(h*k));
   const x=c.getContext('2d');x.setTransform(k,0,0,k,0,0);if(CACHE.ctxs)CACHE.ctxs.push(x);return [c,x]}
 function withCtx(x,fn){const m=ctx;ctx=x;try{fn()}finally{ctx=m}}
 function buildCaches(){
-  CACHE.box={};CACHE.ctxs=[];CACHE.spr={};
+  CACHE.box={};CACHE.ctxs=[];CACHE.spr={};CACHE.cards={};
   buildTiles();
   CACHE.stars=[[.01,80,1.2,1],[.03,60,1.6,2],[.06,34,2.2,3]].map(([k,n,sz,seed])=>{const TW=1024,TH=GROUND-60,pts=[];
     for(let i=0;i<n;i++){const id=i*13+seed*1000;pts.push([rnd(id)*(TW-3),rnd(id+.5)*(TH-10),rnd(id+.9)<.15])}return {k,TW,sz,pts}});
@@ -1020,11 +1021,29 @@ function drawHUD(){
   for(const q of g.ui){if(q.type!=='fly')continue;const k=Math.min(1,q.t/.75),e=1-Math.pow(1-k,3);
     const x=q.sx+((g.hudStarX||112)-q.sx)*e,y=q.sy+(36-q.sy)*e-Math.sin(k*Math.PI)*90;drawStar(x,y,22-8*e)}
 }
-function card(y,txt,sub,big){
-  ctx.font=`800 ${big||40}px ${FONT}`;const w=Math.max(ctx.measureText(txt).width,(ctx.font=`800 22px ${FONT}`,ctx.measureText(sub||'').width))+60,h=sub?110:76;
-  ctx.fillStyle='rgba(255,253,246,.96)';rr(viewW/2-w/2,y-h/2,w,h,22);ctx.fill();ctx.strokeStyle='#2b2140';ctx.lineWidth=4;ctx.stroke();
-  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ff5d8f';ctx.font=`800 ${big||40}px ${FONT}`;ctx.fillText(txt,viewW/2,y-(sub?16:0));
-  if(sub){ctx.fillStyle='#2b2140';ctx.font=`800 22px ${FONT}`;ctx.fillText(sub,viewW/2,y+30)}
+// message cards are rendered once into small images, then just shown (no text layout during play)
+function cardSprite(txt,sub,big){
+  const key=txt+'|'+(sub||'')+'|'+(big||40);let c=CACHE.cards[key];if(c)return c;
+  ctx.font=`800 ${big||40}px ${FONT}`;const w1=ctx.measureText(txt).width;ctx.font=`800 22px ${FONT}`;
+  const w=Math.ceil(Math.max(w1,ctx.measureText(sub||'').width)+60),h=sub?110:76;
+  const [cv,x]=makeCanvas(w+8,h+8);x.translate(4,4);
+  withCtx(x,()=>{ctx.fillStyle='rgba(255,253,246,.96)';rr(0,0,w,h,22);ctx.fill();ctx.strokeStyle='#2b2140';ctx.lineWidth=4;ctx.stroke();
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ff5d8f';ctx.font=`800 ${big||40}px ${FONT}`;ctx.fillText(txt,w/2,h/2-(sub?16:0));
+    if(sub){ctx.fillStyle='#2b2140';ctx.font=`800 22px ${FONT}`;ctx.fillText(sub,w/2,h/2+30)}});
+  return CACHE.cards[key]={c:cv,w:w+8,h:h+8};
+}
+function card(y,txt,sub,big){const s=cardSprite(txt,sub,big);ctx.drawImage(s.c,viewW/2-s.w/2,y-s.h/2,s.w,s.h)}
+const startBanner=()=>({txt:'Hadi! '+ER[g.n]+' say',sub:'Sadece '+KAT[g.n]+' katlarına vur!'});
+const turnBanner=()=>({txt:'Şimdi geriye say!',sub:FROM[g.n]+' başla: '+(10*g.n)+', '+(9*g.n)+', '+(8*g.n)+'...'});
+// prepare every message and label of this level during the countdown, so nothing is laid out mid-run
+function warmTexts(){
+  const b1=startBanner(),b2=turnBanner();cardSprite(b1.txt,b1.sub,34);cardSprite(b2.txt,b2.sub,34);
+  for(const st of[10,20])for(const sb of['Köpek uzaklaştı, harikasın!','Bir can hakkı daha kazandın!'])cardSprite(st+' yıldız! +1 can',sb,34);
+  cardSprite('Köpek yakaladı!','Hiç sorun değil, bir daha deneyelim!');
+  const [c,x]=makeCanvas(400,60);CACHE.ctxs.pop();
+  x.font=`800 17px ${FONT}`;x.fillText(`İleri say: ${ER[g.n]}  »`,0,20);x.fillText(`«  Geri say: ${FROM[g.n]}`,0,40);
+  x.font=`800 22px ${FONT}`;x.fillText('İLERİ SAY GERİ SAY',0,55);x.font=`800 24px ${FONT}`;x.fillText('0123456789 değil! kaçırdın',0,30);
+  x.font=`900 22px ${FONT}`;x.fillText('Hav! Hav! ?',0,50);
 }
 function drawOverlays(){
   if(g.state==='count'){
