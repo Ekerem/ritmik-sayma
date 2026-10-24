@@ -156,7 +156,7 @@ const BOX=70, STEP=92, GAP=170, BOX_BOTTOM=GROUND-120;
 const FONT='"Baloo 2","Fredoka","Trebuchet MS","Arial Rounded MT Bold",Arial,sans-serif';
 const SPEEDS={yavas:125,normal:170,hizli:225};
 // ---------- app version, update check, offline layer ----------
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.0.2';
 const PAGES_URL='https://ekerem.github.io/ritmik-sayma/';
 const IS_NATIVE=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
 const IN_APP=IS_NATIVE||/[?&]app=/.test(location.search);
@@ -1024,7 +1024,12 @@ function frame(now){
     const n=Math.max(1,Math.ceil(dt/(1/120)));for(let i=0;i<n;i++)update(dt/n);
     if(!isFinite(g.p.x)||!isFinite(g.p.y)||!isFinite(g.cam)){g.p.x=g.p.x||0;g.p.y=GROUND;g.p.vy=0;g.p.ground=true;g.cam=g.p.x-viewW*.38}
     draw();
-  }catch(err){if(!errShown){errShown=1;console.error('[ritmik]',err)}try{if(ctx.reset)ctx.reset();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}catch(e){}}
+  }catch(err){if(!errShown){errShown=1;console.error('[ritmik]',err)}
+    try{if(ctx.reset)ctx.reset();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
+      const st=String(err&&err.stack||'').split('\n').slice(0,3).join(' | ');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,cvs.width,70);ctx.fillStyle='#c00';ctx.font='bold 16px monospace';ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillText('HATA ('+APP_VERSION+', '+g.state+'): '+(err&&err.message),10,8);ctx.fillText(st.slice(0,160),10,30);ctx.fillText(st.slice(160,320),10,50);
+    }catch(e){}}
 }
 // if the browser drops the canvas memory (tablets under memory pressure), rebuild instead of going blank
 cvs.addEventListener('contextlost',e=>{e.preventDefault()});
